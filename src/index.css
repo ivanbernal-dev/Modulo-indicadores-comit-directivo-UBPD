@@ -122,9 +122,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .monthly-variables-grid { margin-top: 13px; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
 .monthly-variables-grid article { min-height: 82px; padding: 11px 12px; border: 1px solid #e0e6eb; border-radius: 8px; background: #fafbfc; }
 .monthly-variables-grid article.reported { border-color: #aad7d7; background: white; box-shadow: inset 3px 0 #0090a0; }
-.monthly-variables-grid article > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.monthly-variables-grid .variable-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .monthly-variables-grid small { color: #728096; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-.monthly-variables-grid strong { color: #007789; font-size: 16px; }
+.variable-values { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.variable-values span { padding: 8px; border-radius: 6px; background: #f1f5f6; }
+.variable-values span:last-child { background: #e5f5f3; }
+.variable-values small { display: block; font-size: 7px; }
+.variable-values strong { display: block; margin-top: 4px; color: #007789; font-size: 14px; }
 .monthly-variables-grid p { margin: 7px 0 0; color: #3f4d62; font-size: 9px; line-height: 1.45; }
 .monthly-analysis { max-height: 120px; margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #f5f7f9; overflow: auto; }
 .monthly-analysis small { color: #007789; font-weight: 700; }.monthly-analysis p { margin: 6px 0 0; color: #445267; font-size: 9px; line-height: 1.5; white-space: pre-line; }

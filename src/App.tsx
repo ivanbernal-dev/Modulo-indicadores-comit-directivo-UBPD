@@ -133,6 +133,24 @@ const formatVariableValue = (value: string | number | null) => {
   if (typeof value === "number") return new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(value);
   return value;
 };
+const usesLatestValueForAccumulation = (definition: string | number | null) => {
+  const text = String(definition ?? "").toLowerCase();
+  return /(acumulad|total|meta|universo|porcentaje|denominador|programad|existente|proyectad|línea base|linea base)/.test(text);
+};
+const accumulatedVariableValue = (item: Indicador, month: Mes, variableIndex: number) => {
+  const monthIndex = MESES.indexOf(month);
+  const values = MESES.slice(0, monthIndex + 1)
+    .map((candidateMonth) => monthResult(item, candidateMonth)?.variables[variableIndex] ?? null);
+  const numericValues = values
+    .map((value) => numericValue(value))
+    .filter((value): value is number => value !== null);
+  if (numericValues.length) {
+    return usesLatestValueForAccumulation(item.variables[variableIndex])
+      ? numericValues[numericValues.length - 1]
+      : numericValues.reduce((sum, value) => sum + value, 0);
+  }
+  return [...values].reverse().find((value) => value !== null) ?? null;
+};
 
 function ProgressRing({ value, color }: { value: number; color: string }) {
   const data = [{ value }, { value: Math.max(0, 100 - value) }];
@@ -275,9 +293,14 @@ function MonthlyVariablesPanel({ item, month, onClose }: { item: Indicador; mont
         <div className="monthly-variables-grid">
           {item.variables.map((definition, index) => {
             const value = result?.variables[index] ?? null;
+            const accumulated = accumulatedVariableValue(item, month, index);
             return (
               <article key={index} className={value !== null ? "reported" : ""}>
-                <div><small>Variable {index + 1}</small><strong>{formatVariableValue(value)}</strong></div>
+                <div className="variable-heading"><small>Variable {index + 1}</small></div>
+                <div className="variable-values">
+                  <span><small>Valor del periodo</small><strong>{formatVariableValue(value)}</strong></span>
+                  <span><small>Acumulado al mes</small><strong>{formatVariableValue(accumulated)}</strong></span>
+                </div>
                 <p>{compactText(definition === null ? null : String(definition), "Variable no definida")}</p>
               </article>
             );
@@ -295,7 +318,9 @@ export default function App() {
   const [line, setLine] = useState(lines[0]);
   const [universe, setUniverse] = useState<Universo>("activos");
   const lineItems = useMemo(() => indicadores.filter((item) => item.linea === line), [line]);
-  const dependencies = useMemo(() => [...new Set(lineItems.map((item) => item.dependencia))].sort(), [lineItems]);
+  const dependencies = useMemo(() => [...new Set(lineItems
+    .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
+    .map((item) => item.dependencia))].sort(), [lineItems, universe]);
   const [dependency, setDependency] = useState(ALL_DEPENDENCIES);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -307,11 +332,12 @@ export default function App() {
   useEffect(() => {
     const nextDependencies = [...new Set(indicadores
       .filter((item) => item.linea === line)
+      .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
       .map((item) => item.dependencia))].sort();
     if (dependency !== ALL_DEPENDENCIES && !nextDependencies.includes(dependency)) {
       setDependency(ALL_DEPENDENCIES);
     }
-  }, [line, dependency]);
+  }, [line, universe, dependency]);
 
   const filtered = useMemo(() => indicadores.filter((item) => {
     const stateMatch = universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo";
