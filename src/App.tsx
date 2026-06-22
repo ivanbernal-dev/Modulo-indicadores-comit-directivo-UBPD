@@ -40,6 +40,7 @@ type TabDetalle = "resultados" | "variables" | "informacion";
 type EstadoOAP = "Pendiente" | "Aplicada" | "No aplicada";
 
 const ALL_DEPENDENCIES = "__all_dependencies__";
+const ALL_LINES = "__all_lines__";
 
 type ResultadoMensual = {
   periodoFuente: string;
@@ -315,9 +316,9 @@ function MonthlyVariablesPanel({ item, month, onClose }: { item: Indicador; mont
 
 export default function App() {
   const lines = useMemo(() => Object.values(CANONICAL_LINES).filter((value) => indicadores.some((item) => item.linea === value)), []);
-  const [line, setLine] = useState(lines[0]);
+  const [line, setLine] = useState(ALL_LINES);
   const [universe, setUniverse] = useState<Universo>("activos");
-  const lineItems = useMemo(() => indicadores.filter((item) => item.linea === line), [line]);
+  const lineItems = useMemo(() => indicadores.filter((item) => line === ALL_LINES || item.linea === line), [line]);
   const dependencies = useMemo(() => [...new Set(lineItems
     .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
     .map((item) => item.dependencia))].sort(), [lineItems, universe]);
@@ -331,7 +332,7 @@ export default function App() {
 
   useEffect(() => {
     const nextDependencies = [...new Set(indicadores
-      .filter((item) => item.linea === line)
+      .filter((item) => line === ALL_LINES || item.linea === line)
       .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
       .map((item) => item.dependencia))].sort();
     if (dependency !== ALL_DEPENDENCIES && !nextDependencies.includes(dependency)) {
@@ -343,7 +344,8 @@ export default function App() {
     const stateMatch = universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo";
     const queryMatch = !query || `${item.numeroIndicador} ${item.nombreIndicador}`.toLowerCase().includes(query.toLowerCase());
     const dependencyMatch = dependency === ALL_DEPENDENCIES || item.dependencia === dependency;
-    return item.linea === line && dependencyMatch && stateMatch && queryMatch;
+    const lineMatch = line === ALL_LINES || item.linea === line;
+    return lineMatch && dependencyMatch && stateMatch && queryMatch;
   }), [line, dependency, universe, query]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -363,7 +365,7 @@ export default function App() {
 
         <section className="toolbar">
           <div className="filter-trail">
-            <label><span>Línea estratégica:</span><select aria-label="Línea estratégica" title={line} value={line} onChange={(event) => setLine(event.target.value)}>{lines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label><span>Línea estratégica:</span><select aria-label="Línea estratégica" title={line === ALL_LINES ? "Todas las líneas" : line} value={line} onChange={(event) => setLine(event.target.value)}><option value={ALL_LINES}>Todas las líneas</option>{lines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label><span>Dependencia:</span><select aria-label="Dependencia" title={dependency === ALL_DEPENDENCIES ? "Todas las dependencias" : dependency} value={dependency} onChange={(event) => setDependency(event.target.value)}><option value={ALL_DEPENDENCIES}>Todas las dependencias</option>{dependencies.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label><span>Universo:</span><select aria-label="Universo" value={universe} onChange={(event) => setUniverse(event.target.value as Universo)}><option value="activos">Activos</option><option value="inactivos">Inactivos</option></select></label>
           </div>
