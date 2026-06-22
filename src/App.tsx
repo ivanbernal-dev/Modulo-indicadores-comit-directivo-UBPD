@@ -39,6 +39,8 @@ type Universo = "activos" | "inactivos";
 type TabDetalle = "resultados" | "variables" | "informacion";
 type EstadoOAP = "Pendiente" | "Aplicada" | "No aplicada";
 
+const ALL_DEPENDENCIES = "__all_dependencies__";
+
 type ResultadoMensual = {
   periodoFuente: string;
   variables: (string | number | null)[];
@@ -123,6 +125,14 @@ const latestProgress = (item: Indicador) => {
 };
 const monthResult = (item: Indicador, month: Mes) => item.resultadosMensuales[month];
 const compactText = (text: string | null, fallback = "Sin información reportada.") => text?.trim() || fallback;
+const hasMonthlyValues = (result: ResultadoMensual | undefined) => Boolean(
+  result && (result.formula !== null || result.variables.some((value) => value !== null)),
+);
+const formatVariableValue = (value: string | number | null) => {
+  if (value === null || value === "") return "Sin reporte";
+  if (typeof value === "number") return new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 }).format(value);
+  return value;
+};
 
 function ProgressRing({ value, color }: { value: number; color: string }) {
   const data = [{ value }, { value: Math.max(0, 100 - value) }];
@@ -249,33 +259,65 @@ function OapPanel({ item, month, onClose }: { item: Indicador; month: Mes; onClo
   );
 }
 
+function MonthlyVariablesPanel({ item, month, onClose }: { item: Indicador; month: Mes; onClose: () => void }) {
+  const result = monthResult(item, month);
+  return (
+    <div className="modal-overlay" onMouseDown={onClose}>
+      <section className="variables-modal" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="icon-close" onClick={onClose} aria-label="Cerrar variables"><X size={18} /></button>
+        <p className="drawer-kicker">Variables reportadas — {result?.periodoFuente || month}</p>
+        <h2>{item.numeroIndicador}. {item.nombreIndicador}</h2>
+        <div className="monthly-result-summary">
+          <span>Resultado de la fórmula</span>
+          <strong>{formatValue(result?.formula, item)}</strong>
+          <small>{compactText(item.formulaIndicador, "Fórmula no definida")}</small>
+        </div>
+        <div className="monthly-variables-grid">
+          {item.variables.map((definition, index) => {
+            const value = result?.variables[index] ?? null;
+            return (
+              <article key={index} className={value !== null ? "reported" : ""}>
+                <div><small>Variable {index + 1}</small><strong>{formatVariableValue(value)}</strong></div>
+                <p>{compactText(definition === null ? null : String(definition), "Variable no definida")}</p>
+              </article>
+            );
+          })}
+        </div>
+        {result?.analisisCualitativo && <div className="monthly-analysis"><small>Análisis del periodo</small><p>{result.analisisCualitativo}</p></div>}
+        <div className="modal-actions"><button className="save-button" onClick={onClose}>Cerrar</button></div>
+      </section>
+    </div>
+  );
+}
+
 export default function App() {
   const lines = useMemo(() => Object.values(CANONICAL_LINES).filter((value) => indicadores.some((item) => item.linea === value)), []);
   const [line, setLine] = useState(lines[0]);
   const [universe, setUniverse] = useState<Universo>("activos");
   const lineItems = useMemo(() => indicadores.filter((item) => item.linea === line), [line]);
-  const dependencies = useMemo(() => [...new Set(lineItems
-    .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
-    .map((item) => item.dependencia))].sort(), [lineItems, universe]);
-  const [dependency, setDependency] = useState(dependencies[0]);
+  const dependencies = useMemo(() => [...new Set(lineItems.map((item) => item.dependencia))].sort(), [lineItems]);
+  const [dependency, setDependency] = useState(ALL_DEPENDENCIES);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
   const [detailItem, setDetailItem] = useState<Indicador | null>(null);
   const [comment, setComment] = useState<{ item: Indicador; month: Mes } | null>(null);
+  const [monthlyVariables, setMonthlyVariables] = useState<{ item: Indicador; month: Mes } | null>(null);
 
   useEffect(() => {
     const nextDependencies = [...new Set(indicadores
       .filter((item) => item.linea === line)
-      .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
       .map((item) => item.dependencia))].sort();
-    if (!nextDependencies.includes(dependency)) setDependency(nextDependencies[0] || "");
-  }, [line, universe, dependency]);
+    if (dependency !== ALL_DEPENDENCIES && !nextDependencies.includes(dependency)) {
+      setDependency(ALL_DEPENDENCIES);
+    }
+  }, [line, dependency]);
 
   const filtered = useMemo(() => indicadores.filter((item) => {
     const stateMatch = universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo";
     const queryMatch = !query || `${item.numeroIndicador} ${item.nombreIndicador}`.toLowerCase().includes(query.toLowerCase());
-    return item.linea === line && item.dependencia === dependency && stateMatch && queryMatch;
+    const dependencyMatch = dependency === ALL_DEPENDENCIES || item.dependencia === dependency;
+    return item.linea === line && dependencyMatch && stateMatch && queryMatch;
   }), [line, dependency, universe, query]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -296,7 +338,7 @@ export default function App() {
         <section className="toolbar">
           <div className="filter-trail">
             <label><span>Línea estratégica:</span><select aria-label="Línea estratégica" title={line} value={line} onChange={(event) => setLine(event.target.value)}>{lines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label><span>Dependencia:</span><select aria-label="Dependencia" title={dependency} value={dependency} onChange={(event) => setDependency(event.target.value)}>{dependencies.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label><span>Dependencia:</span><select aria-label="Dependencia" title={dependency === ALL_DEPENDENCIES ? "Todas las dependencias" : dependency} value={dependency} onChange={(event) => setDependency(event.target.value)}><option value={ALL_DEPENDENCIES}>Todas las dependencias</option>{dependencies.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label><span>Universo:</span><select aria-label="Universo" value={universe} onChange={(event) => setUniverse(event.target.value as Universo)}><option value="activos">Activos</option><option value="inactivos">Inactivos</option></select></label>
           </div>
           <div className="toolbar-actions"><button className="outline-button" onClick={() => setUniverse(universe === "activos" ? "inactivos" : "activos")}>Cambiar universo</button><a className="excel-button" href={`${import.meta.env.BASE_URL}LISTADO-MAESTRO-INDICADORES-2026.xlsx`} download><Download size={16} />Exportar Excel</a></div>
@@ -325,7 +367,8 @@ export default function App() {
                     {MESES.map((month) => {
                       const result = monthResult(item, month);
                       const hasComment = Boolean(result?.observacionOAP);
-                      return <td key={month} className="month-cell"><b>{formatValue(result?.formula, item)}</b><button disabled={!hasComment} className={hasComment ? "flag has-comment" : "flag"} onClick={() => hasComment && setComment({ item, month })} title={hasComment ? "Ver comentario OAP" : "Sin comentario OAP"}><Flag size={14} fill={hasComment ? "currentColor" : "none"} /></button></td>;
+                      const hasValues = hasMonthlyValues(result);
+                      return <td key={month} className="month-cell"><button disabled={!hasValues} className={hasValues ? "month-result has-values" : "month-result"} onClick={() => hasValues && setMonthlyVariables({ item, month })} title={hasValues ? "Ver variables del periodo" : "Sin resultado reportado"}>{formatValue(result?.formula, item)}</button><button disabled={!hasComment} className={hasComment ? "flag has-comment" : "flag"} onClick={() => hasComment && setComment({ item, month })} title={hasComment ? "Ver comentario OAP" : "Sin comentario OAP"}><Flag size={14} fill={hasComment ? "currentColor" : "none"} /></button></td>;
                     })}
                   </tr>;
                 })}
@@ -342,6 +385,7 @@ export default function App() {
       </main>
       {detailItem && <DetailPanel item={detailItem} onClose={() => setDetailItem(null)} />}
       {comment && <OapPanel item={comment.item} month={comment.month} onClose={() => setComment(null)} />}
+      {monthlyVariables && <MonthlyVariablesPanel item={monthlyVariables.item} month={monthlyVariables.month} onClose={() => setMonthlyVariables(null)} />}
     </div>
   );
 }
