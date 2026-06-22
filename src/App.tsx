@@ -374,7 +374,7 @@ export default function App() {
           <div className="filter-trail">
             <label><span>Línea estratégica:</span><select aria-label="Línea estratégica" title={line === ALL_LINES ? "Todas las líneas" : line} value={line} onChange={(event) => setLine(event.target.value)}><option value={ALL_LINES}>Todas las líneas</option>{lines.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
             <label><span>Dependencia:</span><select aria-label="Dependencia" title={dependency === ALL_DEPENDENCIES ? "Todas las dependencias" : dependency} value={dependency} onChange={(event) => setDependency(event.target.value)}><option value={ALL_DEPENDENCIES}>Todas las dependencias</option>{dependencies.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label><span>Estado del indicador:</span><select aria-label="Estado del indicador" value={universe} onChange={(event) => setUniverse(event.target.value as Universo)}><option value="activos">Activos, modificados y nuevos</option><option value="inactivos">Inactivos</option></select></label>
+            <label className="status-filter"><span>Estado del indicador:</span><select aria-label="Estado del indicador" value={universe} onChange={(event) => setUniverse(event.target.value as Universo)}><option value="activos">Activos</option><option value="inactivos">Inactivos</option></select></label>
           </div>
           <div className="toolbar-actions"><a className="excel-button" href={`${import.meta.env.BASE_URL}LISTADO-MAESTRO-INDICADORES-2026.xlsx`} download><Download size={16} />Exportar Excel</a></div>
         </section>
