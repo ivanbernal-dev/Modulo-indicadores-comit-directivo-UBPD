@@ -1,0 +1,3 @@
+# El prototipo usa exclusivamente la biblioteca estándar de Python 3.12.
+# Para producción se recomienda ejecutar detrás de un proxy HTTPS y migrar
+# el repositorio SQLite a PostgreSQL manteniendo la capa de servicios.
