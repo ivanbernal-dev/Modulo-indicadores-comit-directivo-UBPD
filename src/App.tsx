@@ -95,11 +95,60 @@ const canonicalDependency = (value: string) => {
     : normalized;
 };
 
-const indicadores = (source.indicadores as Indicador[]).map((item) => ({
+const fallbackIndicators = (source.indicadores as Indicador[]).map((item) => ({
   ...item,
   linea: canonicalLine(item.linea),
   dependencia: canonicalDependency(item.dependencia),
 }));
+
+const mapPublicApiIndicators = (rows: Record<string, any>[]): Indicador[] => rows.map((row) => {
+  const variableDefinitions: (string | number | null)[] = Array(7).fill(null);
+  for (const variable of row.variables ?? []) {
+    if (variable.posicion >= 1 && variable.posicion <= 7) {
+      variableDefinitions[variable.posicion - 1] = variable.descripcion || variable.nombre;
+    }
+  }
+  const monthlyResults: Partial<Record<Mes, ResultadoMensual>> = {};
+  for (const report of row.resultados_mensuales ?? []) {
+    const month = MESES[Number(report.mes) - 1];
+    if (!month) continue;
+    const values: (string | number | null)[] = Array(7).fill(null);
+    for (const value of report.valores ?? []) {
+      if (value.posicion >= 1 && value.posicion <= 7) values[value.posicion - 1] = value.valor_periodo;
+    }
+    monthlyResults[month] = {
+      periodoFuente: month,
+      variables: values,
+      formula: report.resultado_numerico,
+      analisisCualitativo: report.analisis_cualitativo,
+      logrosDificultades: report.logros_dificultades,
+      observaciones: report.observaciones_dependencia,
+      observacionOAP: report.observacion_oap?.comentario ?? null,
+    };
+  }
+  return {
+    id: String(row.id),
+    consecutivo: row.id,
+    linea: canonicalLine(row.line_name),
+    resultadoEstrategico: null,
+    productoPAI: null,
+    dependencia: canonicalDependency(row.dependency_name),
+    responsablesAsociados: null,
+    numeroIndicador: row.codigo,
+    nombreIndicador: row.nombre,
+    objetivo: row.objetivo,
+    definicionOperativa: row.definicion_operativa,
+    formulaIndicador: row.formula_display || row.formula_expression,
+    variables: variableDefinitions,
+    periodicidad: row.periodicidad,
+    unidadMedida: row.unidad_medida,
+    fuenteInformacion: row.fuente_informacion,
+    lineaBase: null,
+    metaAnual2026: row.meta_anual,
+    estado2026: row.estado_indicador as Estado,
+    resultadosMensuales: monthlyResults,
+  };
+});
 
 const cleanLabel = (value: string) => value.replace(/\s+/g, " ").trim();
 const shortLine = (value: string) => cleanLabel(value).replace(/\s*\([^)]*\)\s*$/, "");
@@ -322,10 +371,12 @@ function MonthlyVariablesPanel({ item, month, onClose }: { item: Indicador; mont
 }
 
 export default function App() {
-  const lines = useMemo(() => Object.values(CANONICAL_LINES).filter((value) => indicadores.some((item) => item.linea === value)), []);
+  const [indicatorData, setIndicatorData] = useState<Indicador[]>(fallbackIndicators);
+  const [dataSource, setDataSource] = useState("Datos de demostración");
+  const lines = useMemo(() => Object.values(CANONICAL_LINES).filter((value) => indicatorData.some((item) => item.linea === value)), [indicatorData]);
   const [line, setLine] = useState(ALL_LINES);
   const [universe, setUniverse] = useState<Universo>("activos");
-  const lineItems = useMemo(() => indicadores.filter((item) => line === ALL_LINES || item.linea === line), [line]);
+  const lineItems = useMemo(() => indicatorData.filter((item) => line === ALL_LINES || item.linea === line), [indicatorData, line]);
   const dependencies = useMemo(() => [...new Set(lineItems
     .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
     .map((item) => item.dependencia))].sort(), [lineItems, universe]);
@@ -338,22 +389,37 @@ export default function App() {
   const [monthlyVariables, setMonthlyVariables] = useState<{ item: Indicador; month: Mes } | null>(null);
 
   useEffect(() => {
-    const nextDependencies = [...new Set(indicadores
+    const apiUrl = import.meta.env.VITE_PUBLIC_API_URL?.replace(/\/$/, "");
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/public/indicators?year=2026&active_only=false`)
+      .then((response) => {
+        if (!response.ok) throw new Error("No fue posible consultar SISPLAN-Búsqueda");
+        return response.json();
+      })
+      .then((rows) => {
+        setIndicatorData(mapPublicApiIndicators(rows));
+        setDataSource("SISPLAN-Búsqueda · reportes aprobados");
+      })
+      .catch(() => setDataSource("Datos de demostración · API no disponible"));
+  }, []);
+
+  useEffect(() => {
+    const nextDependencies = [...new Set(indicatorData
       .filter((item) => line === ALL_LINES || item.linea === line)
       .filter((item) => universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo")
       .map((item) => item.dependencia))].sort();
     if (dependency !== ALL_DEPENDENCIES && !nextDependencies.includes(dependency)) {
       setDependency(ALL_DEPENDENCIES);
     }
-  }, [line, universe, dependency]);
+  }, [indicatorData, line, universe, dependency]);
 
-  const filtered = useMemo(() => indicadores.filter((item) => {
+  const filtered = useMemo(() => indicatorData.filter((item) => {
     const stateMatch = universe === "activos" ? item.estado2026 !== "Inactivo" : item.estado2026 === "Inactivo";
     const queryMatch = !query || `${item.numeroIndicador} ${item.nombreIndicador}`.toLowerCase().includes(query.toLowerCase());
     const dependencyMatch = dependency === ALL_DEPENDENCIES || item.dependencia === dependency;
     const lineMatch = line === ALL_LINES || item.linea === line;
     return lineMatch && dependencyMatch && stateMatch && queryMatch;
-  }), [line, dependency, universe, query]);
+  }), [indicatorData, line, dependency, universe, query]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => setPage(1), [line, dependency, universe, query, pageSize]);
@@ -362,13 +428,20 @@ export default function App() {
   const end = Math.min(filtered.length, page * pageSize);
 
   return (
-    <div className="app-layout">
-      <Sidebar />
-      <main className="main-area">
-        <header className="topbar">
-          <div><p>Visor institucional</p><h1>Indicadores Comité Directivo</h1><span>Visor de indicadores estratégicos por línea, dependencia y estado</span></div>
-          <div className="breadcrumbs"><span>Inicio</span><ChevronRight /><span>Comité Directivo</span><ChevronRight /><b>Indicadores</b><div className="avatar">AU</div><ChevronDown /></div>
-        </header>
+    <div className="public-app">
+      <header className="public-site-header">
+        <div className="public-header-inner">
+          <div className="public-brand"><Sprout /><strong>UBPD</strong><span>Unidad de Búsqueda<br />de Personas dadas por Desaparecidas</span></div>
+          <div className="public-system-name"><strong>Visor de Indicadores</strong><span>Comité Directivo</span></div>
+        </div>
+      </header>
+      <main className="public-main">
+        <section className="public-hero">
+          <p>INFORMACIÓN INSTITUCIONAL</p>
+          <h1>Indicadores del Comité Directivo</h1>
+          <span>Consulta pública de resultados estratégicos por línea, dependencia y estado</span>
+          <small>{dataSource}</small>
+        </section>
 
         <section className="toolbar">
           <div className="filter-trail">
@@ -416,7 +489,7 @@ export default function App() {
             <div className="pagination"><span>Mostrando {start} a {end} de {filtered.length}</span><button disabled={page === 1} onClick={() => setPage(page - 1)}><ChevronLeft /></button>{Array.from({ length: Math.min(pageCount, 4) }, (_, index) => index + 1).map((value) => <button key={value} className={page === value ? "current" : ""} onClick={() => setPage(value)}>{value}</button>)}{pageCount > 4 && <><span>…</span><button className={page === pageCount ? "current" : ""} onClick={() => setPage(pageCount)}>{pageCount}</button></>}<button disabled={page === pageCount} onClick={() => setPage(page + 1)}><ChevronRight /></button><select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value={5}>5 por página</option><option value={10}>10 por página</option><option value={20}>20 por página</option></select></div>
           </footer>
         </section>
-        <footer className="source-note">Fuente: {source.fuente} · {indicadores.length} indicadores cargados</footer>
+        <footer className="source-note">Fuente administrada en SISPLAN-Búsqueda · {indicatorData.length} indicadores disponibles · Solo se publican reportes aprobados</footer>
       </main>
       {detailItem && <DetailPanel item={detailItem} onClose={() => setDetailItem(null)} />}
       {comment && <OapPanel item={comment.item} month={comment.month} onClose={() => setComment(null)} />}
