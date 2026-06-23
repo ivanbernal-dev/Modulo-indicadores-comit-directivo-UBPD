@@ -431,7 +431,9 @@ export default function App() {
     <div className="public-app">
       <header className="public-site-header">
         <div className="public-header-inner">
-          <div className="public-brand"><Sprout /><strong>UBPD</strong><span>Unidad de Búsqueda<br />de Personas dadas por Desaparecidas</span></div>
+          <div className="public-brand">
+            <img src={`${import.meta.env.BASE_URL}logo-ubpd.png`} alt="Unidad de Búsqueda de Personas dadas por Desaparecidas - UBPD" />
+          </div>
           <div className="public-system-name"><strong>Visor de Indicadores</strong><span>Comité Directivo</span></div>
         </div>
       </header>
@@ -463,7 +465,7 @@ export default function App() {
               <tbody>
                 {visible.map((item) => {
                   const progress = latestProgress(item);
-                  const color = item.estado2026 === "Modificado" ? "#1f8cdf" : item.estado2026 === "Nuevo" ? "#8b5cf6" : item.estado2026 === "Inactivo" ? "#a5adb5" : "#16a365";
+                  const color = item.estado2026 === "Modificado" ? "#769aa0" : item.estado2026 === "Nuevo" ? "#8c7eac" : item.estado2026 === "Inactivo" ? "#a5adb5" : "#5f878d";
                   return <tr key={item.id}>
                     <td className="number-cell">{item.numeroIndicador}</td>
                     <td><button className="indicator-link" onClick={() => setDetailItem(item)}>{item.nombreIndicador}</button></td>
